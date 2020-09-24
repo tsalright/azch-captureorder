@@ -18,13 +18,41 @@ stages:
     pool:
       vmImage: ubuntu-latest
     steps:
-    - task: Docker@2
-      displayName: Build and push an image to container registry
+    - task: Bash@3
+      displayName: Build image
       inputs:
-        command: buildAndPush
-        repository: captureorder
-        dockerfile: '**/Dockerfile'
+        targetType: "inline"
+        script: |
+          # Write your commands here
+          set -x
+          docker build -t captureorder:$(tag) .
+          docker tag captureorder:$(tag) $(acrEndpoint)/captureorder:$(tag)
+
+    - task: Docker@2
+      displayName: Login into Aqua registry
+      inputs:
+        containerRegistry: "aquaRegistry"
+        command: "login"
+
+    - task: aquasecScanner@4
+      displayName: Scan image with Aqua
+      inputs:
+        image: captureorder:$(tag)
+        scanType: "local"
+        register: false
+        hideBase: false
+        showNegligible: false
+        windowsScannerVersion: "4.2.0"
+        connection: "aqua-console"
+        scanner: "registry.aquasec.com/scanner:5.0"
+        customFlags: "--layer-vulnerabilities"
+
+    - task: Docker@2
+      displayName: Push image
+      inputs:
         containerRegistry: $(dockerRegistryServiceConnection)
+        repository: captureorder
+        command: push
         tags: $(tag)
 
     - task: PublishPipelineArtifact@0
